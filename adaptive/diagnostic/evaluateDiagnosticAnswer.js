@@ -42,6 +42,7 @@ Scoring:
     });
 
     const raw = completion.choices[0].message.content.trim();
+    console.log("RAW OPENAI RESPONSE:", raw);
 
     // Попытка извлечь JSON даже если есть лишний текст
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
