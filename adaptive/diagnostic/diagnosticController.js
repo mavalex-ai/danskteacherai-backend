@@ -32,6 +32,9 @@ export async function startDiagnostic(req, res) {
 export async function diagnosticNextStep(req, res) {
   const { userId, answerMeta } = req.body;
 
+  console.log("=== DIAGNOSTIC REQUEST ===");
+  console.log("Incoming answerMeta:", answerMeta);
+
   if (!userId) {
     return res.status(400).json({ error: "userId is required" });
   }
@@ -54,6 +57,7 @@ export async function diagnosticNextStep(req, res) {
   }
 
   const currentStep = userState.diagnostic.stepsCompleted + 1;
+  console.log("Current step:", currentStep);
 
   let task;
 
@@ -108,14 +112,17 @@ export async function diagnosticNextStep(req, res) {
 
   let score;
 
-  if (answerMeta?.text && currentStep > 1) {
+  if (answerMeta?.text) {
     try {
+      console.log("Evaluating answer text...");
       score = await evaluateDiagnosticAnswer(task, answerMeta.text);
       console.log("Diagnostic score:", score);
     } catch (err) {
       console.error("Evaluation failed:", err);
       score = 0.5;
     }
+  } else {
+    console.log("No text found in answerMeta");
   }
 
   userState.updateFromAnswer({
@@ -136,6 +143,9 @@ export async function diagnosticNextStep(req, res) {
         ? scores.reduce((a, b) => a + b, 0) / scores.length
         : 0;
 
+    console.log("Scores array:", scores);
+    console.log("Average score:", avgScore);
+
     let estimatedLevel;
     let confidence;
 
@@ -153,7 +163,7 @@ export async function diagnosticNextStep(req, res) {
     userState.stopDiagnostic(estimatedLevel);
     await saveUserState(userState);
 
-    console.log("Diagnostic finished. Avg score:", avgScore);
+    console.log("Diagnostic finished. Level:", estimatedLevel);
 
     return res.json({
       diagnosticResult: {
