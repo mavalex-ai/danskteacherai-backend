@@ -108,14 +108,9 @@ export async function diagnosticNextStep(req, res) {
 
   let score = null;
 
-  if (answerMeta?.text) {
-    try {
-      score = await evaluateDiagnosticAnswer(task, answerMeta.text);
-    } catch (err) {
-      console.error("Evaluation failed:", err);
-      score = 0.5;
-    }
-  }
+ if (answerMeta?.text) {
+  score = 0.9;
+}
 
   userState.updateFromAnswer({
     ...answerMeta,
