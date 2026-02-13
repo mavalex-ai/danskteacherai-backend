@@ -22,24 +22,36 @@ Target level: ${task.level}
 User answer:
 "${userText}"
 
-Return ONLY valid JSON in this format:
-{ "score": number_between_0_and_1 }
+Return ONLY pure JSON.
+No explanations.
+No extra text.
 
-Scoring guidelines:
-0.0–0.3 = very weak (A2)
-0.4–0.6 = PD2 range
-0.7–1.0 = PD3 ready
+Format:
+{"score": 0.0-1.0}
+
+Scoring:
+0.0–0.3 = A2
+0.4–0.6 = PD2
+0.7–1.0 = PD3
 `;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.2
+      temperature: 0
     });
 
-    const raw = completion.choices[0].message.content;
+    const raw = completion.choices[0].message.content.trim();
 
-    const parsed = JSON.parse(raw);
+    // Попытка извлечь JSON даже если есть лишний текст
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      console.warn("No JSON found in response:", raw);
+      return 0.5;
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
 
     if (typeof parsed.score === "number") {
       return Math.max(0, Math.min(1, parsed.score));
