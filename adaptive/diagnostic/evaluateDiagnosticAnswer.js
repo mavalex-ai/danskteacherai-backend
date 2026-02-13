@@ -1,63 +1,49 @@
 import OpenAI from "openai";
 
 export async function evaluateDiagnosticAnswer(task, userText) {
-  try {
-    if (!process.env.OPENAI_API_KEY) {
-      return 0.5;
-    }
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is missing");
+  }
 
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  });
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a strict Danish language examiner. Respond ONLY with valid JSON."
-        },
-        {
-          role: "user",
-          content: `
-Evaluate this Danish learner answer.
+  const completion = await openai.chat.completions.create({
+    model: "gpt-3.5-turbo",
+    temperature: 0,
+    messages: [
+      {
+        role: "system",
+        content: "Respond ONLY with JSON."
+      },
+      {
+        role: "user",
+        content: `
+Evaluate this text:
 
-Target level: ${task.level}
-Focus: ${task.focus}
-
-Answer:
 "${userText}"
 
-Return ONLY this JSON:
-{"score": number_between_0_and_1}
+Return:
+{"score": 0.0-1.0}
 `
-        }
-      ]
-    });
+      }
+    ]
+  });
 
-    const raw = completion.choices?.[0]?.message?.content;
+  console.log("FULL OPENAI RESPONSE:", JSON.stringify(completion, null, 2));
 
-    if (!raw) {
-      return 0.5;
-    }
+  const raw = completion.choices[0].message.content;
 
-    let parsed;
-
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return 0.5;
-    }
-
-    if (typeof parsed.score === "number") {
-      return Math.max(0, Math.min(1, parsed.score));
-    }
-
-    return 0.5;
-
-  } catch (error) {
-    return 0.5;
+  if (!raw) {
+    throw new Error("Model returned empty content");
   }
+
+  const parsed = JSON.parse(raw);
+
+  if (typeof parsed.score !== "number") {
+    throw new Error("Score not found in JSON");
+  }
+
+  return parsed.score;
 }
