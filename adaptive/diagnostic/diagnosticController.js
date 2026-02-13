@@ -1,10 +1,9 @@
-// Backend2/adaptive/diagnostic/diagnosticController.js
-
+console.log("🔥 DIAGNOSTIC CONTROLLER LOADED");
 import { loadUserState, saveUserState } from "../persistence/stateRepository.js";
 import { UserState } from "../state/UserState.js";
 
 /**
- * START DIAGNOSTIC (FREE MODE)
+ * START DIAGNOSTIC
  */
 export async function startDiagnostic(req, res) {
   const { userId } = req.body;
@@ -26,7 +25,7 @@ export async function startDiagnostic(req, res) {
 }
 
 /**
- * DIAGNOSTIC STEP (STRICT MODE)
+ * DIAGNOSTIC STEP
  */
 export async function diagnosticNextStep(req, res) {
   const { userId, answerMeta } = req.body;
@@ -41,8 +40,7 @@ export async function diagnosticNextStep(req, res) {
     return res.status(400).json({ error: "Diagnostic not initialized" });
   }
 
-  // 🔒 HARD STOP:
-  // If diagnostic is already finished — NEVER return tasks again
+  // If already finished
   if (!userState.diagnostic.active) {
     return res.json({
       diagnosticResult: {
@@ -53,19 +51,59 @@ export async function diagnosticNextStep(req, res) {
     });
   }
 
-  // =========================
-  // UPDATE STATE
-  // =========================
+  const currentStep = userState.diagnostic.stepsCompleted + 1;
+
+  let task;
+
+  switch (currentStep) {
+    case 1:
+      task = {
+        type: "production",
+        level: "A2",
+        focus: "personal",
+        instruction:
+          "Write 4–8 sentences about yourself in Danish."
+      };
+      break;
+
+    case 2:
+      task = {
+        type: "production",
+        level: "A2/B1",
+        focus: "routine",
+        instruction:
+          "Describe your typical weekday in Danish."
+      };
+      break;
+
+    case 3:
+      task = {
+        type: "production",
+        level: "B1",
+        focus: "opinion",
+        instruction:
+          "What do you think about learning Danish? Write your opinion."
+      };
+      break;
+
+    case 4:
+      task = {
+        type: "production",
+        level: "B1/B2",
+        focus: "reflection",
+        instruction:
+          "Describe a challenge you experienced and how you handled it."
+      };
+      break;
+
+    default:
+      task = null;
+  }
+
+  // Now increment AFTER deciding task
   userState.updateFromAnswer(answerMeta);
 
-  const step = userState.diagnostic.stepsCompleted;
-  const maxSteps = userState.diagnostic.maxSteps;
-
-  // =========================
-  // FINISH DIAGNOSTIC (ATOMIC)
-  // =========================
-  if (step >= maxSteps) {
-    // Simple heuristic (v1)
+  if (userState.diagnostic.stepsCompleted >= userState.diagnostic.maxSteps) {
     const estimatedLevel = "PD2";
 
     userState.stopDiagnostic(estimatedLevel);
@@ -80,21 +118,12 @@ export async function diagnosticNextStep(req, res) {
     });
   }
 
-  // =========================
-  // CONTINUE DIAGNOSTIC STEP
-  // =========================
   await saveUserState(userState);
 
   return res.json({
     action: "DIAGNOSTIC_STEP",
-    step,
-    task: {
-      type: "production",
-      level: "B1",
-      focus: "general_language",
-      instruction:
-        "Write a short text about a topic that interests you."
-    },
+    step: currentStep,
+    task,
     languageMode: "EN"
   });
 }

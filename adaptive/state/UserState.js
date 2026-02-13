@@ -32,7 +32,7 @@ export class UserState {
     this.diagnostic = {
       active: false,
       stepsCompleted: 0,
-      maxSteps: 5,
+      maxSteps: 4, // ← ВАЖНО: теперь строго 4 шага
       estimatedLevel: null
     };
 
@@ -168,10 +168,8 @@ export class UserState {
       return;
     }
 
-    // text always increments
     this.addTextStep();
 
-    // voice accounting (future hook)
     if (typeof answerMeta.voiceSeconds === "number") {
       this.addVoiceSeconds(answerMeta.voiceSeconds);
     }

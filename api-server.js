@@ -1,5 +1,6 @@
 // Backend2/api-server.js
 
+console.log("🔥 NEW DIAGNOSTIC CONTROLLER ACTIVE");
 console.log("RUNNING FROM:", import.meta.url);
 
 import express from "express";
@@ -18,7 +19,8 @@ import { handleUserStep } from "./adaptive/session/sessionController.js";
 // =========================
 import {
   loadUserState,
-  saveUserState
+  saveUserState,
+  resetUserState
 } from "./adaptive/persistence/stateRepository.js";
 
 // =========================
@@ -49,7 +51,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-
 // =====================================================
 // HEALTH CHECK
 // =====================================================
@@ -57,9 +58,27 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
+// =====================================================
+// DEV RESET USER (SAFE GET VERSION)
+// =====================================================
+app.get("/dev/reset-user", async (req, res) => {
+  try {
+    const userId = req.query.userId || "test-user";
+
+    await resetUserState(userId);
+
+    res.json({
+      status: "user_reset_done",
+      userId
+    });
+  } catch (err) {
+    console.error("Reset error:", err);
+    res.status(500).json({ error: "Reset failed" });
+  }
+});
 
 // =====================================================
-// OPENAI CONNECTION TEST (BROWSER FRIENDLY)
+// OPENAI CONNECTION TEST
 // =====================================================
 app.get("/api/test-openai", async (req, res) => {
   try {
@@ -73,14 +92,13 @@ app.get("/api/test-openai", async (req, res) => {
       reply
     });
   } catch (err) {
-    console.error("❌ OpenAI test failed:", err);
+    console.error("OpenAI test failed:", err);
     res.status(500).json({
       ok: false,
       error: err.message
     });
   }
 });
-
 
 // =====================================================
 // EXAM CONTROL
@@ -89,13 +107,11 @@ app.post("/exam/start", startExam);
 app.post("/exam/stop", stopExam);
 app.get("/exam/status", getExamStatus);
 
-
 // =====================================================
 // DIAGNOSTIC
 // =====================================================
 app.post("/diagnostic/start", startDiagnostic);
 app.post("/diagnostic/step", diagnosticNextStep);
-
 
 // =====================================================
 // SET LEARNING MODE
@@ -116,16 +132,15 @@ app.post("/session/set-mode", async (req, res) => {
       userState = new UserState(userId);
     }
 
-    userState.setMode(mode);
+    userState.mode = mode;
     await saveUserState(userState);
 
     res.json({ status: "ok", mode });
   } catch (err) {
-    console.error("❌ Set mode error:", err);
+    console.error("Set mode error:", err);
     res.status(500).json({ error: "Failed to set mode" });
   }
 });
-
 
 // =====================================================
 // ADAPTIVE PIPELINE
@@ -143,54 +158,15 @@ app.post("/adaptive/next-step", async (req, res) => {
     const decision = await handleUserStep(userId, answerMeta || {});
     res.json(decision);
   } catch (err) {
-    console.error("❌ Adaptive error:", err);
+    console.error("Adaptive error:", err);
     res.status(500).json({
       error: "Adaptive decision failed"
     });
   }
 });
 
-
 // =====================================================
-// SHOPIFY WEBHOOK (MOCK)
-// =====================================================
-app.post("/webhook/shopify", async (req, res) => {
-  try {
-    const { userId, event, plan } = req.body;
-
-    if (!userId || !event) {
-      return res.status(400).json({
-        error: "Invalid webhook payload"
-      });
-    }
-
-    let userState = await loadUserState(userId);
-    if (!userState) userState = new UserState(userId);
-
-    if (event === "subscription_created") {
-      userState.activateSubscription({
-        plan,
-        validUntil: Date.now() + 30 * 24 * 60 * 60 * 1000
-      });
-    }
-
-    if (event === "subscription_cancelled") {
-      userState.expireSubscription();
-    }
-
-    await saveUserState(userState);
-
-    console.log("💳 Shopify event:", event);
-    res.json({ status: "ok" });
-  } catch (err) {
-    console.error("❌ Shopify webhook error:", err);
-    res.status(500).json({ error: "Webhook failed" });
-  }
-});
-
-
-// =====================================================
-// AI CHAT (OPTIONAL)
+// AI CHAT
 // =====================================================
 app.post("/api/teacher", async (req, res) => {
   try {
@@ -209,13 +185,12 @@ app.post("/api/teacher", async (req, res) => {
 
     res.json({ reply });
   } catch (err) {
-    console.error("❌ AI error:", err);
+    console.error("AI error:", err);
     res.status(500).json({
       error: "AI request failed"
     });
   }
 });
-
 
 // =====================================================
 // START SERVER
@@ -223,5 +198,5 @@ app.post("/api/teacher", async (req, res) => {
 const port = process.env.PORT || 3001;
 
 app.listen(port, () => {
-  console.log(`🚀 Dansk TeacherAI backend running on port ${port}`);
+  console.log(`Dansk TeacherAI backend running on port ${port}`);
 });
