@@ -1,11 +1,16 @@
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
 export async function evaluateDiagnosticAnswer(task, userText) {
   try {
+    if (!process.env.OPENAI_API_KEY) {
+      console.warn("OPENAI_API_KEY missing");
+      return 0.5;
+    }
+
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+
     const prompt = `
 You are a Danish language examiner.
 
@@ -21,11 +26,9 @@ Return ONLY valid JSON in this format:
 { "score": number_between_0_and_1 }
 
 Scoring guidelines:
-0.0–0.3 = very weak (clear A1/A2)
-0.4–0.6 = mid level (PD2 range)
-0.7–1.0 = strong (PD3 ready)
-
-Be strict but fair.
+0.0–0.3 = very weak (A2)
+0.4–0.6 = PD2 range
+0.7–1.0 = PD3 ready
 `;
 
     const completion = await openai.chat.completions.create({
