@@ -1,4 +1,5 @@
 console.log("🔥 DIAGNOSTIC CONTROLLER LOADED");
+
 import { loadUserState, saveUserState } from "../persistence/stateRepository.js";
 import { UserState } from "../state/UserState.js";
 
@@ -100,11 +101,32 @@ export async function diagnosticNextStep(req, res) {
       task = null;
   }
 
-  // Now increment AFTER deciding task
+  // Update state AFTER generating task
   userState.updateFromAnswer(answerMeta);
 
+  // If finished
   if (userState.diagnostic.stepsCompleted >= userState.diagnostic.maxSteps) {
-    const estimatedLevel = "PD2";
+
+    const scores = userState.diagnostic.scores;
+
+    const avgScore =
+      scores.length > 0
+        ? scores.reduce((a, b) => a + b, 0) / scores.length
+        : 0;
+
+    let estimatedLevel;
+    let confidence;
+
+    if (avgScore < 0.4) {
+      estimatedLevel = "A2";
+      confidence = "medium";
+    } else if (avgScore < 0.7) {
+      estimatedLevel = "PD2";
+      confidence = "high";
+    } else {
+      estimatedLevel = "PD3";
+      confidence = "high";
+    }
 
     userState.stopDiagnostic(estimatedLevel);
     await saveUserState(userState);
@@ -112,7 +134,7 @@ export async function diagnosticNextStep(req, res) {
     return res.json({
       diagnosticResult: {
         level: estimatedLevel,
-        confidence: "medium"
+        confidence
       },
       languageMode: "EN"
     });

@@ -5,8 +5,8 @@ export class UserState {
     // =========================
     // UI / LANGUAGE
     // =========================
-    this.uiLanguage = "EN"; // EN | DA
-    this.languageMode = "EN_FULL"; // EN_FULL | EN_DA | DA_ONLY
+    this.uiLanguage = "EN";
+    this.languageMode = "EN_FULL";
 
     // =========================
     // LEARNING MODE
@@ -18,11 +18,11 @@ export class UserState {
     // =========================
     this.subscription = {
       active: false,
-      plan: null // BASIC_20 | PRO_40
+      plan: null
     };
 
     // =========================
-    // DAILY USAGE (HYBRID CORE)
+    // DAILY USAGE
     // =========================
     this.usage = this.createFreshUsage();
 
@@ -32,8 +32,9 @@ export class UserState {
     this.diagnostic = {
       active: false,
       stepsCompleted: 0,
-      maxSteps: 4, // ← ВАЖНО: теперь строго 4 шага
-      estimatedLevel: null
+      maxSteps: 4,
+      estimatedLevel: null,
+      scores: [] // ← ДОБАВЛЕНО
     };
 
     // =========================
@@ -105,6 +106,7 @@ export class UserState {
     this.diagnostic.active = true;
     this.diagnostic.stepsCompleted = 0;
     this.diagnostic.estimatedLevel = null;
+    this.diagnostic.scores = []; // ← СБРОС SCORE
     this.uiLanguage = "EN";
   }
 
@@ -165,6 +167,11 @@ export class UserState {
 
     if (this.diagnostic.active) {
       this.diagnostic.stepsCompleted += 1;
+
+      if (typeof answerMeta?.score === "number") {
+        this.diagnostic.scores.push(answerMeta.score);
+      }
+
       return;
     }
 
