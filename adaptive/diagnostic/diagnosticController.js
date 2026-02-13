@@ -42,7 +42,6 @@ export async function diagnosticNextStep(req, res) {
     return res.status(400).json({ error: "Diagnostic not initialized" });
   }
 
-  // Already finished
   if (!userState.diagnostic.active) {
     return res.json({
       diagnosticResult: {
@@ -102,19 +101,24 @@ export async function diagnosticNextStep(req, res) {
       task = null;
   }
 
-  // =========================
-  // EVALUATE ANSWER
-  // =========================
+  let score = 0.5;
+  let evaluationAttempted = false;
+  let evaluationError = null;
 
-  let score = null;
+  // =========================
+  // DEBUG: Проверяем что реально приходит
+  // =========================
+  const receivedText = answerMeta?.text || null;
 
- if (answerMeta?.text) {
-  try {
-    score = await evaluateDiagnosticAnswer(task, answerMeta.text);
-  } catch (err) {
-    score = 0.5;
+  if (receivedText) {
+    evaluationAttempted = true;
+    try {
+      score = await evaluateDiagnosticAnswer(task, receivedText);
+    } catch (err) {
+      evaluationError = err.message;
+      score = 0.5;
+    }
   }
-}
 
   userState.updateFromAnswer({
     ...answerMeta,
@@ -127,7 +131,7 @@ export async function diagnosticNextStep(req, res) {
 
   if (userState.diagnostic.stepsCompleted >= userState.diagnostic.maxSteps) {
 
-    const scores = userState.diagnostic.scores;
+    const scores = userState.diagnostic.scores || [];
 
     const avgScore =
       scores.length > 0
@@ -155,7 +159,12 @@ export async function diagnosticNextStep(req, res) {
       diagnosticResult: {
         level: estimatedLevel,
         confidence,
-        avgScore // DEBUG
+        avgScore
+      },
+      debug: {
+        receivedText,
+        evaluationAttempted,
+        evaluationError
       },
       languageMode: "EN"
     });
@@ -167,7 +176,12 @@ export async function diagnosticNextStep(req, res) {
     action: "DIAGNOSTIC_STEP",
     step: currentStep,
     task,
-    debugScore: score, // DEBUG
+    debugScore: score,
+    debug: {
+      receivedText,
+      evaluationAttempted,
+      evaluationError
+    },
     languageMode: "EN"
   });
 }
