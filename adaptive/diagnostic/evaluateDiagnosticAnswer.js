@@ -11,12 +11,13 @@ export async function evaluateDiagnosticAnswer(task, userText) {
     });
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-3.5-turbo",
       temperature: 0,
       messages: [
         {
           role: "system",
-          content: "You are a strict Danish language examiner. Always respond with ONLY JSON."
+          content:
+            "You are a strict Danish language examiner. Respond ONLY with valid JSON."
         },
         {
           role: "user",
@@ -29,32 +30,26 @@ Focus: ${task.focus}
 Answer:
 "${userText}"
 
-Return ONLY:
+Return ONLY this JSON:
 {"score": number_between_0_and_1}
 `
         }
       ]
     });
 
-    const raw = completion.choices?.[0]?.message?.content || "";
+    const raw = completion.choices?.[0]?.message?.content;
 
     if (!raw) {
       return 0.5;
     }
 
-    // Удаляем возможные markdown ```json
-    const cleaned = raw
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
+    let parsed;
 
-    const jsonMatch = cleaned.match(/\{[\s\S]*?\}/);
-
-    if (!jsonMatch) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
       return 0.5;
     }
-
-    const parsed = JSON.parse(jsonMatch[0]);
 
     if (typeof parsed.score === "number") {
       return Math.max(0, Math.min(1, parsed.score));
