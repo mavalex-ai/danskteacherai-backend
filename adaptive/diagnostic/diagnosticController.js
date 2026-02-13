@@ -2,6 +2,7 @@ console.log("🔥 DIAGNOSTIC CONTROLLER LOADED");
 
 import { loadUserState, saveUserState } from "../persistence/stateRepository.js";
 import { UserState } from "../state/UserState.js";
+import { evaluateDiagnosticAnswer } from "./evaluateDiagnosticAnswer.js";
 
 /**
  * START DIAGNOSTIC
@@ -101,10 +102,31 @@ export async function diagnosticNextStep(req, res) {
       task = null;
   }
 
-  // Update state AFTER generating task
-  userState.updateFromAnswer(answerMeta);
+  // =========================
+  // EVALUATE PREVIOUS ANSWER
+  // =========================
 
-  // If finished
+  let score;
+
+  if (answerMeta?.text && currentStep > 1) {
+    try {
+      score = await evaluateDiagnosticAnswer(task, answerMeta.text);
+      console.log("Diagnostic score:", score);
+    } catch (err) {
+      console.error("Evaluation failed:", err);
+      score = 0.5;
+    }
+  }
+
+  userState.updateFromAnswer({
+    ...answerMeta,
+    score
+  });
+
+  // =========================
+  // FINISH IF MAX STEPS
+  // =========================
+
   if (userState.diagnostic.stepsCompleted >= userState.diagnostic.maxSteps) {
 
     const scores = userState.diagnostic.scores;
@@ -130,6 +152,8 @@ export async function diagnosticNextStep(req, res) {
 
     userState.stopDiagnostic(estimatedLevel);
     await saveUserState(userState);
+
+    console.log("Diagnostic finished. Avg score:", avgScore);
 
     return res.json({
       diagnosticResult: {
