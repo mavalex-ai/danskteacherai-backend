@@ -31,10 +31,10 @@ export async function diagnosticNextStep(req, res) {
   }
 
   // =========================
-  // STEP 1: evaluate previous answer
+  // Evaluate ONLY if text exists
   // =========================
 
-  if (answerMeta?.text) {
+  if (answerMeta && typeof answerMeta.text === "string" && answerMeta.text.trim().length > 0) {
 
     const score = await evaluateDiagnosticAnswer(
       null,
@@ -49,7 +49,7 @@ export async function diagnosticNextStep(req, res) {
   }
 
   // =========================
-  // STEP 2: check completion
+  // Completion check
   // =========================
 
   if (userState.diagnostic.stepsCompleted >= userState.diagnostic.maxSteps) {
@@ -84,7 +84,7 @@ export async function diagnosticNextStep(req, res) {
   }
 
   // =========================
-  // STEP 3: send next task
+  // Next step
   // =========================
 
   const nextStep = userState.diagnostic.stepsCompleted + 1;
