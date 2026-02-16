@@ -1,182 +1,168 @@
 // Backend2/adaptive/ai/adaptiveTaskGenerator.js
 
 /**
- * Exam-aware adaptive task generator
- * Supports Diagnostic, PD2 and PD3
+ * Production Adaptive Task Generator
+ * Fully level-aware
  */
 
 // =========================
-// DIAGNOSTIC TASKS (EN ONLY)
+// HELPERS
 // =========================
-const DIAGNOSTIC_TASKS = [
+
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// =========================
+// A2 TASKS
+// =========================
+
+const A2_TASKS = [
+
   {
+    exam: "PD2",
     type: "production",
     level: "A2",
-    focus: "self_description",
-    instruction:
-      "Write a short text (4–6 sentences) about yourself. For example: who you are, where you live, and what you do."
+    focus: "self",
+    instruction: "Skriv 4–6 korte sætninger om dig selv."
   },
+
   {
+    exam: "PD2",
     type: "production",
     level: "A2",
     focus: "daily_life",
-    instruction:
-      "Describe a typical day in your life. Write 4–6 simple sentences."
+    instruction: "Beskriv din hverdag med enkle sætninger."
   },
+
   {
-    type: "production",
-    level: "B1",
-    focus: "opinion",
-    instruction:
-      "Write a short text giving your opinion on a topic that interests you. Try to explain why you think so."
-  },
-  {
-    type: "production",
-    level: "B1",
-    focus: "work_or_study",
-    instruction:
-      "Write a short text about your work or studies. What do you do, and what do you like or dislike about it?"
+    exam: "PD2",
+    type: "vocabulary",
+    level: "A2",
+    focus: "basic_words",
+    instruction: "Skriv 5 sætninger med almindelige daglige ord."
   }
+
 ];
 
 // =========================
-// LEVEL LIMITS PER EXAM
+// PD2 TASKS
 // =========================
-const EXAM_LEVEL_LIMITS = {
-  PD2: ["A2", "B1"],
-  PD3: ["B1", "B2"]
-};
 
-// =========================
-// PD2 TASK TEMPLATES
-// =========================
-const PD2_TASK_TEMPLATES = [
+const PD2_TASKS = [
+
   {
     exam: "PD2",
     type: "production",
-    level: "A2",
-    focus: "daily_life",
-    instruction: "Skriv 5 korte sætninger om din hverdag."
-  },
-  {
-    exam: "PD2",
-    type: "production",
-    level: "A2",
-    focus: "family",
-    instruction: "Beskriv din familie med 4–6 enkle sætninger."
-  },
-  {
-    exam: "PD2",
-    type: "grammar",
     level: "B1",
-    focus: "verb_tense",
-    instruction: "Udfyld sætningerne med korrekt nutid eller datid."
+    focus: "daily_life",
+    instruction: "Beskriv en typisk dag i dit liv."
   },
+
   {
     exam: "PD2",
     type: "reading",
     level: "B1",
     focus: "comprehension",
-    instruction: "Læs teksten og besvar 5 korte spørgsmål."
+    instruction: "Læs teksten og besvar spørgsmålene."
+  },
+
+  {
+    exam: "PD2",
+    type: "grammar",
+    level: "B1",
+    focus: "verb_tense",
+    instruction: "Skriv sætninger i korrekt nutid og datid."
   }
+
 ];
 
 // =========================
-// PD3 TASK TEMPLATES
+// PD3 TASKS
 // =========================
-const PD3_TASK_TEMPLATES = [
+
+const PD3_TASKS = [
+
   {
     exam: "PD3",
-    type: "argumentative_text",
+    type: "argumentative",
     level: "B1",
-    register: "semi-formal",
-    context: "work",
     instruction:
-      "Din arbejdsplads overvejer hjemmearbejde. Skriv en tekst, hvor du beskriver én fordel og én ulempe ved hjemmearbejde."
+      "Skriv en tekst, hvor du giver din mening om et emne."
   },
+
   {
     exam: "PD3",
-    type: "structured_response",
+    type: "structured",
     level: "B2",
-    register: "semi-formal",
-    context: "society",
     instruction:
-      "Mange mener, at sociale medier har for stor indflydelse på samfundet. Skriv en struktureret tekst, hvor du giver din mening."
+      "Skriv en struktureret tekst med argumenter."
   },
+
   {
     exam: "PD3",
-    type: "reformulation",
-    level: "B1",
-    register: "semi-formal",
-    context: "work",
+    type: "formal",
+    level: "B2",
     instruction:
-      "Omskriv teksten, så sproget bliver mere formelt og passer til en arbejdssituation."
+      "Skriv en formel tekst i arbejdssammenhæng."
   }
+
 ];
-
-// =========================
-// HELPERS
-// =========================
-function pickRandom(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function clampLevel(level, allowedLevels) {
-  if (allowedLevels.includes(level)) return level;
-  return allowedLevels[0];
-}
 
 // =========================
 // MAIN GENERATOR
 // =========================
+
 export async function generateAdaptiveTask({
+
   action,
-  level = "B1",
-  examTarget = null
+  userLevel = "PD2",
+  examTarget = "PD2"
+
 }) {
+
   // =========================
-  // 🧪 DIAGNOSTIC MODE (EN)
+  // A2 FOUNDATION
   // =========================
-  if (action === "DIAGNOSTIC_STEP") {
-    return pickRandom(DIAGNOSTIC_TASKS);
+
+  if (action === "REINFORCE_FOUNDATION" || userLevel === "A2") {
+
+    return pickRandom(A2_TASKS);
+
   }
 
   // =========================
-  // 🎓 PD3 EXAM MODE
+  // PD3 MODE
   // =========================
-  if (action === "TRAIN_EXAM_SKILL_PD3" || examTarget === "PD3") {
-    const allowed = EXAM_LEVEL_LIMITS.PD3;
-    const finalLevel = clampLevel(level, allowed);
 
-    const candidates = PD3_TASK_TEMPLATES.filter(
-      t => t.level === finalLevel
-    );
+  if (
+    action === "TRAIN_EXAM_SKILL_PD3" ||
+    examTarget === "PD3" ||
+    userLevel === "PD3"
+  ) {
 
-    return pickRandom(candidates.length ? candidates : PD3_TASK_TEMPLATES);
+    return pickRandom(PD3_TASKS);
+
   }
 
   // =========================
-  // 🎓 PD2 EXAM MODE
+  // PD2 MODE
   // =========================
-  if (action === "TRAIN_EXAM_SKILL" || examTarget === "PD2") {
-    const allowed = EXAM_LEVEL_LIMITS.PD2;
-    const finalLevel = clampLevel(level, allowed);
 
-    const candidates = PD2_TASK_TEMPLATES.filter(
-      t => t.level === finalLevel
-    );
+  if (
+    action === "ADVANCE" ||
+    examTarget === "PD2" ||
+    userLevel === "PD2"
+  ) {
 
-    return pickRandom(candidates.length ? candidates : PD2_TASK_TEMPLATES);
+    return pickRandom(PD2_TASKS);
+
   }
 
   // =========================
-  // 🟢 NORMAL LEARNING MODE
+  // SAFE FALLBACK
   // =========================
-  return {
-    type: "production",
-    level,
-    focus: "general_language",
-    instruction:
-      "Write a short text about a topic that interests you."
-  };
+
+  return pickRandom(A2_TASKS);
+
 }
