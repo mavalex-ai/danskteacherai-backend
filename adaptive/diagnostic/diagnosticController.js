@@ -130,7 +130,7 @@ export async function diagnosticNextStep(req, res) {
 
   });
 
-  if (currentStep > userState.diagnostic.maxSteps) {
+  if (userState.diagnostic.stepsCompleted >= userState.diagnostic.maxSteps) {
 
     const scores = userState.diagnostic.scores;
 
