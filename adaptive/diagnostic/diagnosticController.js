@@ -1,55 +1,57 @@
-console.log("🔥 DIAGNOSTIC CONTROLLER LOADED");
-
 import { loadUserState, saveUserState } from "../persistence/stateRepository.js";
 import { UserState } from "../state/UserState.js";
 import { evaluateDiagnosticAnswer } from "./evaluateDiagnosticAnswer.js";
 
-/**
- * START DIAGNOSTIC
- */
 export async function startDiagnostic(req, res) {
-  const { userId } = req.body;
 
-  if (!userId) {
-    return res.status(400).json({ error: "userId is required" });
-  }
+  const { userId } = req.body;
 
   let userState = await loadUserState(userId);
 
   if (!userState) {
+
     userState = new UserState(userId);
+
   }
 
   userState.startDiagnostic();
+
   await saveUserState(userState);
 
-  return res.json({ status: "diagnostic_started" });
+  res.json({ status: "diagnostic_started" });
+
 }
 
-/**
- * DIAGNOSTIC STEP
- */
 export async function diagnosticNextStep(req, res) {
+
   const { userId, answerMeta } = req.body;
 
-  if (!userId) {
-    return res.status(400).json({ error: "userId is required" });
-  }
+  let userState = await loadUserState(userId);
 
-  const userState = await loadUserState(userId);
+  if (!userState) {
 
-  if (!userState || !userState.diagnostic) {
     return res.status(400).json({ error: "Diagnostic not initialized" });
+
   }
 
   if (!userState.diagnostic.active) {
+
     return res.json({
+
       diagnosticResult: {
-        level: userState.diagnostic.estimatedLevel || "PD2",
-        confidence: "medium"
+
+        level: userState.diagnostic.estimatedLevel,
+
+        avgScore: userState.diagnostic.avgScore,
+
+        confidence: "high"
+
       },
+
       languageMode: "EN"
+
     });
+
   }
 
   const currentStep = userState.diagnostic.stepsCompleted + 1;
@@ -57,131 +59,138 @@ export async function diagnosticNextStep(req, res) {
   let task;
 
   switch (currentStep) {
+
     case 1:
+
       task = {
+
         type: "production",
         level: "A2",
         focus: "personal",
-        instruction:
-          "Write 4–8 sentences about yourself in Danish."
+        instruction: "Write 4–8 sentences about yourself in Danish."
+
       };
+
       break;
 
     case 2:
+
       task = {
+
         type: "production",
         level: "A2/B1",
         focus: "routine",
-        instruction:
-          "Describe your typical weekday in Danish."
+        instruction: "Describe your typical weekday in Danish."
+
       };
+
       break;
 
     case 3:
+
       task = {
+
         type: "production",
         level: "B1",
         focus: "opinion",
-        instruction:
-          "What do you think about learning Danish? Write your opinion."
+        instruction: "What do you think about learning Danish? Write your opinion."
+
       };
+
       break;
 
     case 4:
+
       task = {
+
         type: "production",
         level: "B1/B2",
         focus: "reflection",
-        instruction:
-          "Describe a challenge you experienced and how you handled it."
+        instruction: "Describe a challenge you experienced and how you handled it."
+
       };
+
       break;
 
-    default:
-      task = null;
   }
 
   let score = 0.5;
-  let evaluationAttempted = false;
-  let evaluationError = null;
 
-  // =========================
-  // DEBUG: Проверяем что реально приходит
-  // =========================
-  const receivedText = answerMeta?.text || null;
+  if (answerMeta?.text) {
 
-  if (receivedText) {
-    evaluationAttempted = true;
-    try {
-      score = await evaluateDiagnosticAnswer(task, receivedText);
-    } catch (err) {
-      evaluationError = err.message;
-      score = 0.5;
-    }
+    score = await evaluateDiagnosticAnswer(task, answerMeta.text);
+
   }
 
   userState.updateFromAnswer({
-    ...answerMeta,
-    score
-  });
 
-  // =========================
-  // FINISH IF MAX STEPS
-  // =========================
+    ...answerMeta,
+
+    score
+
+  });
 
   if (userState.diagnostic.stepsCompleted >= userState.diagnostic.maxSteps) {
 
-    const scores = userState.diagnostic.scores || [];
+    const scores = userState.diagnostic.scores;
 
     const avgScore =
-      scores.length > 0
-        ? scores.reduce((a, b) => a + b, 0) / scores.length
-        : 0;
+      scores.reduce((a, b) => a + b, 0) / scores.length;
 
     let estimatedLevel;
-    let confidence;
 
-    if (avgScore < 0.4) {
+    if (avgScore < 0.40) {
+
       estimatedLevel = "A2";
-      confidence = "medium";
-    } else if (avgScore < 0.7) {
+
+    }
+    else if (avgScore < 0.65) {
+
       estimatedLevel = "PD2";
-      confidence = "high";
-    } else {
+
+    }
+    else {
+
       estimatedLevel = "PD3";
-      confidence = "high";
+
     }
 
-    userState.stopDiagnostic(estimatedLevel);
+    userState.stopDiagnostic(estimatedLevel, avgScore);
+
     await saveUserState(userState);
 
     return res.json({
+
       diagnosticResult: {
+
         level: estimatedLevel,
-        confidence,
-        avgScore
+
+        avgScore,
+
+        confidence: "high"
+
       },
-      debug: {
-        receivedText,
-        evaluationAttempted,
-        evaluationError
-      },
+
       languageMode: "EN"
+
     });
+
   }
 
   await saveUserState(userState);
 
-  return res.json({
+  res.json({
+
     action: "DIAGNOSTIC_STEP",
+
     step: currentStep,
+
     task,
+
     debugScore: score,
-    debug: {
-      receivedText,
-      evaluationAttempted,
-      evaluationError
-    },
+
     languageMode: "EN"
+
   });
+
 }
