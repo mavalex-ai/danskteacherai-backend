@@ -170,11 +170,16 @@ async function handleUserStep(userId, answerMeta = {}) {
 
   if (!examinerFeedback) {
 
-    task = await generateAdaptiveTask({
-      action: result.decision.action,
-      examTarget: userState.exam.target || null,
-      userLevel: userState.diagnostic?.estimatedLevel || "PD2"
-    });
+    const adaptiveLevel =
+  userState.diagnostic?.estimatedLevel ||
+  userState.exam?.target ||
+  "PD2";
+
+task = await generateAdaptiveTask({
+  action: result.decision.action,
+  examTarget: adaptiveLevel,
+  userLevel: adaptiveLevel
+});
 
   }
 
