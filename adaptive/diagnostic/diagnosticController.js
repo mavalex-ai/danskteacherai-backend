@@ -9,9 +9,7 @@ export async function startDiagnostic(req, res) {
   let userState = await loadUserState(userId);
 
   if (!userState) {
-
     userState = new UserState(userId);
-
   }
 
   userState.startDiagnostic();
@@ -29,106 +27,30 @@ export async function diagnosticNextStep(req, res) {
   let userState = await loadUserState(userId);
 
   if (!userState) {
-
     return res.status(400).json({ error: "Diagnostic not initialized" });
-
   }
 
-  if (!userState.diagnostic.active) {
+  // =========================
+  // STEP 1: evaluate previous answer
+  // =========================
 
-    return res.json({
+  if (answerMeta?.text) {
 
-      diagnosticResult: {
+    const score = await evaluateDiagnosticAnswer(
+      null,
+      answerMeta.text
+    );
 
-        level: userState.diagnostic.estimatedLevel,
-
-        avgScore: userState.diagnostic.avgScore,
-
-        confidence: "high"
-
-      },
-
-      languageMode: "EN"
-
+    userState.updateFromAnswer({
+      ...answerMeta,
+      score
     });
 
   }
 
-  const currentStep = userState.diagnostic.stepsCompleted + 1;
-
-  let task;
-
-  switch (currentStep) {
-
-    case 1:
-
-      task = {
-
-        type: "production",
-        level: "A2",
-        focus: "personal",
-        instruction: "Write 4–8 sentences about yourself in Danish."
-
-      };
-
-      break;
-
-    case 2:
-
-      task = {
-
-        type: "production",
-        level: "A2/B1",
-        focus: "routine",
-        instruction: "Describe your typical weekday in Danish."
-
-      };
-
-      break;
-
-    case 3:
-
-      task = {
-
-        type: "production",
-        level: "B1",
-        focus: "opinion",
-        instruction: "What do you think about learning Danish? Write your opinion."
-
-      };
-
-      break;
-
-    case 4:
-
-      task = {
-
-        type: "production",
-        level: "B1/B2",
-        focus: "reflection",
-        instruction: "Describe a challenge you experienced and how you handled it."
-
-      };
-
-      break;
-
-  }
-
-  let score = 0.5;
-
-  if (answerMeta?.text) {
-
-    score = await evaluateDiagnosticAnswer(task, answerMeta.text);
-
-  }
-
-  userState.updateFromAnswer({
-
-    ...answerMeta,
-
-    score
-
-  });
+  // =========================
+  // STEP 2: check completion
+  // =========================
 
   if (userState.diagnostic.stepsCompleted >= userState.diagnostic.maxSteps) {
 
@@ -139,58 +61,85 @@ export async function diagnosticNextStep(req, res) {
 
     let estimatedLevel;
 
-    if (avgScore < 0.40) {
-
+    if (avgScore < 0.40)
       estimatedLevel = "A2";
-
-    }
-    else if (avgScore < 0.65) {
-
+    else if (avgScore < 0.65)
       estimatedLevel = "PD2";
-
-    }
-    else {
-
+    else
       estimatedLevel = "PD3";
-
-    }
 
     userState.stopDiagnostic(estimatedLevel, avgScore);
 
     await saveUserState(userState);
 
     return res.json({
-
       diagnosticResult: {
-
         level: estimatedLevel,
-
         avgScore,
-
         confidence: "high"
-
       },
-
       languageMode: "EN"
-
     });
+
+  }
+
+  // =========================
+  // STEP 3: send next task
+  // =========================
+
+  const nextStep = userState.diagnostic.stepsCompleted + 1;
+
+  let task;
+
+  switch (nextStep) {
+
+    case 1:
+      task = {
+        type: "production",
+        level: "A2",
+        focus: "personal",
+        instruction: "Write 4–8 sentences about yourself in Danish."
+      };
+      break;
+
+    case 2:
+      task = {
+        type: "production",
+        level: "A2/B1",
+        focus: "routine",
+        instruction: "Describe your typical weekday in Danish."
+      };
+      break;
+
+    case 3:
+      task = {
+        type: "production",
+        level: "B1",
+        focus: "opinion",
+        instruction:
+          "What do you think about learning Danish? Write your opinion."
+      };
+      break;
+
+    case 4:
+      task = {
+        type: "production",
+        level: "B1/B2",
+        focus: "reflection",
+        instruction:
+          "Describe a challenge you experienced and how you handled it."
+      };
+      break;
 
   }
 
   await saveUserState(userState);
 
   res.json({
-
     action: "DIAGNOSTIC_STEP",
-
-    step: currentStep,
-
+    step: nextStep,
     task,
-
-    debugScore: score,
-
     languageMode: "EN"
-
   });
 
 }
