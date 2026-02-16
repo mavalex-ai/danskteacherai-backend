@@ -59,7 +59,20 @@ app.get("/health", (req, res) => {
 });
 
 // =====================================================
-// DEV RESET USER (SAFE GET VERSION)
+// ENV DEBUG ENDPOINT  ← ДОБАВЛЕНО
+// =====================================================
+app.get("/debug/env", (req, res) => {
+  const key = process.env.OPENAI_API_KEY;
+
+  res.json({
+    hasKey: !!key,
+    keyLength: key ? key.length : 0,
+    keyPrefix: key ? key.substring(0, 7) : null
+  });
+});
+
+// =====================================================
+// DEV RESET USER
 // =====================================================
 app.get("/dev/reset-user", async (req, res) => {
   try {
@@ -136,6 +149,7 @@ app.post("/session/set-mode", async (req, res) => {
     await saveUserState(userState);
 
     res.json({ status: "ok", mode });
+
   } catch (err) {
     console.error("Set mode error:", err);
     res.status(500).json({ error: "Failed to set mode" });
@@ -157,6 +171,7 @@ app.post("/adaptive/next-step", async (req, res) => {
 
     const decision = await handleUserStep(userId, answerMeta || {});
     res.json(decision);
+
   } catch (err) {
     console.error("Adaptive error:", err);
     res.status(500).json({
@@ -184,6 +199,7 @@ app.post("/api/teacher", async (req, res) => {
     });
 
     res.json({ reply });
+
   } catch (err) {
     console.error("AI error:", err);
     res.status(500).json({
