@@ -30,68 +30,12 @@ export async function diagnosticNextStep(req, res) {
     return res.status(400).json({ error: "Diagnostic not initialized" });
   }
 
-  // =========================
-  // Evaluate ONLY if text exists
-  // =========================
-
-  if (answerMeta && typeof answerMeta.text === "string" && answerMeta.text.trim().length > 0) {
-
-    const score = await evaluateDiagnosticAnswer(
-      null,
-      answerMeta.text
-    );
-
-    userState.updateFromAnswer({
-      ...answerMeta,
-      score
-    });
-
-  }
-
-  // =========================
-  // Completion check
-  // =========================
-
-  if (userState.diagnostic.stepsCompleted >= userState.diagnostic.maxSteps) {
-
-    const scores = userState.diagnostic.scores;
-
-    const avgScore =
-      scores.reduce((a, b) => a + b, 0) / scores.length;
-
-    let estimatedLevel;
-
-    if (avgScore < 0.40)
-      estimatedLevel = "A2";
-    else if (avgScore < 0.65)
-      estimatedLevel = "PD2";
-    else
-      estimatedLevel = "PD3";
-
-    userState.stopDiagnostic(estimatedLevel, avgScore);
-
-    await saveUserState(userState);
-
-    return res.json({
-      diagnosticResult: {
-        level: estimatedLevel,
-        avgScore,
-        confidence: "high"
-      },
-      languageMode: "EN"
-    });
-
-  }
-
-  // =========================
-  // Next step
-  // =========================
-
-  const nextStep = userState.diagnostic.stepsCompleted + 1;
+  // determine current step BEFORE evaluation
+  const currentStep = userState.diagnostic.stepsCompleted + 1;
 
   let task;
 
-  switch (nextStep) {
+  switch (currentStep) {
 
     case 1:
       task = {
@@ -133,11 +77,58 @@ export async function diagnosticNextStep(req, res) {
 
   }
 
+  // evaluate answer ONLY if exists
+  if (answerMeta?.text && answerMeta.text.trim().length > 0) {
+
+    const score = await evaluateDiagnosticAnswer(
+      task,
+      answerMeta.text
+    );
+
+    userState.updateFromAnswer({
+      ...answerMeta,
+      score
+    });
+
+  }
+
+  // completion check AFTER update
+  if (userState.diagnostic.stepsCompleted >= userState.diagnostic.maxSteps) {
+
+    const scores = userState.diagnostic.scores;
+
+    const avgScore =
+      scores.reduce((a, b) => a + b, 0) / scores.length;
+
+    let estimatedLevel;
+
+    if (avgScore < 0.40)
+      estimatedLevel = "A2";
+    else if (avgScore < 0.65)
+      estimatedLevel = "PD2";
+    else
+      estimatedLevel = "PD3";
+
+    userState.stopDiagnostic(estimatedLevel, avgScore);
+
+    await saveUserState(userState);
+
+    return res.json({
+      diagnosticResult: {
+        level: estimatedLevel,
+        avgScore,
+        confidence: "high"
+      },
+      languageMode: "EN"
+    });
+
+  }
+
   await saveUserState(userState);
 
   res.json({
     action: "DIAGNOSTIC_STEP",
-    step: nextStep,
+    step: currentStep,
     task,
     languageMode: "EN"
   });
