@@ -27,6 +27,12 @@ export class UserState {
     };
 
     // =========================
+    // FREE ADAPTIVE ACCESS
+    // =========================
+
+    this.freeAdaptiveStepsRemaining = 0;
+
+    // =========================
     // USAGE
     // =========================
 
@@ -148,9 +154,15 @@ export class UserState {
 
   startDiagnostic() {
 
+    if (!this.diagnostic) {
+      this.diagnostic = {};
+    }
+
     this.diagnostic.active = true;
 
     this.diagnostic.stepsCompleted = 0;
+
+    this.diagnostic.maxSteps = 4;
 
     this.diagnostic.scores = [];
 
@@ -172,16 +184,13 @@ export class UserState {
 
     this.mode = "ADAPTIVE";
 
-    if (avgScore >= 0.65) {
+    // 🎁 Give free adaptive steps
+    this.freeAdaptiveStepsRemaining = 5;
 
+    if (avgScore >= 0.65)
       this.exam.target = "PD3";
-
-    }
-    else {
-
+    else
       this.exam.target = "PD2";
-
-    }
 
   }
 
@@ -225,7 +234,11 @@ export class UserState {
 
     this.session.lastActive = Date.now();
 
-    if (this.diagnostic.active) {
+    if (this.diagnostic && this.diagnostic.active) {
+
+      if (!this.diagnostic.scores) {
+        this.diagnostic.scores = [];
+      }
 
       if (typeof answerMeta.score === "number") {
 
@@ -271,7 +284,9 @@ export class UserState {
 
       exam: this.exam,
 
-      mode: this.mode
+      mode: this.mode,
+
+      freeAdaptiveStepsRemaining: this.freeAdaptiveStepsRemaining
 
     };
 
