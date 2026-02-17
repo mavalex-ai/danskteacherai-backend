@@ -1,8 +1,8 @@
 // Backend2/adaptive/ai/adaptiveTaskGenerator.js
 
 /**
- * Production Adaptive Task Generator
- * Fully level-aware
+ * Production Adaptive Task Generator v2
+ * Creates engaging, varied, exam-relevant tasks
  */
 
 // =========================
@@ -13,72 +13,86 @@ function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function pickDifferent(arr, lastType) {
+  const filtered = arr.filter(t => t.type !== lastType);
+  if (filtered.length === 0) return pickRandom(arr);
+  return pickRandom(filtered);
+}
+
 // =========================
-// A2 TASKS
+// FOUNDATION TASKS (A2)
 // =========================
 
-const A2_TASKS = [
+const FOUNDATION_TASKS = [
 
   {
     exam: "PD2",
-    type: "production",
+    type: "guided_production",
     level: "A2",
-    focus: "self",
-    instruction: "Skriv 4–6 korte sætninger om dig selv."
+    instruction:
+      "Du møder en ny kollega. Skriv 4–6 sætninger og præsenter dig selv."
   },
 
   {
     exam: "PD2",
-    type: "production",
+    type: "correction",
     level: "A2",
-    focus: "daily_life",
-    instruction: "Beskriv din hverdag med enkle sætninger."
+    instruction:
+      "Skriv 4–5 sætninger om din hverdag. Du får bagefter en forbedret version."
   },
 
   {
     exam: "PD2",
-    type: "vocabulary",
+    type: "conversation",
     level: "A2",
-    focus: "basic_words",
-    instruction: "Skriv 5 sætninger med almindelige daglige ord."
+    instruction:
+      "Du taler med din nabo. Skriv hvad du siger om din dag."
   }
 
 ];
 
 // =========================
-// PD2 TASKS
+// PD2 TASKS (B1)
 // =========================
 
 const PD2_TASKS = [
 
   {
     exam: "PD2",
-    type: "production",
+    type: "real_life_scenario",
     level: "B1",
-    focus: "daily_life",
-    instruction: "Beskriv en typisk dag i dit liv."
+    instruction:
+      "Du skriver en besked til din chef om en ændring i din arbejdstid. Skriv beskeden."
   },
 
   {
     exam: "PD2",
-    type: "reading",
+    type: "correction",
     level: "B1",
-    focus: "comprehension",
-    instruction: "Læs teksten og besvar spørgsmålene."
+    instruction:
+      "Beskriv din arbejdsdag. Du får bagefter en mere korrekt version."
   },
 
   {
     exam: "PD2",
-    type: "grammar",
+    type: "reading_response",
     level: "B1",
-    focus: "verb_tense",
-    instruction: "Skriv sætninger i korrekt nutid og datid."
+    instruction:
+      "Læs teksten og forklar hovedideen med dine egne ord."
+  },
+
+  {
+    exam: "PD2",
+    type: "conversation",
+    level: "B1",
+    instruction:
+      "Din ven spørger hvorfor du lærer dansk. Svar med 4–6 sætninger."
   }
 
 ];
 
 // =========================
-// PD3 TASKS
+// PD3 TASKS (B1–B2)
 // =========================
 
 const PD3_TASKS = [
@@ -88,23 +102,39 @@ const PD3_TASKS = [
     type: "argumentative",
     level: "B1",
     instruction:
-      "Skriv en tekst, hvor du giver din mening om et emne."
+      "Din arbejdsplads overvejer hjemmearbejde. Beskriv én fordel og én ulempe."
   },
 
   {
     exam: "PD3",
-    type: "structured",
+    type: "formal_email",
     level: "B2",
     instruction:
-      "Skriv en struktureret tekst med argumenter."
+      "Skriv en formel email til en arbejdsgiver om en jobmulighed."
   },
 
   {
     exam: "PD3",
-    type: "formal",
+    type: "correction",
     level: "B2",
     instruction:
-      "Skriv en formel tekst i arbejdssammenhæng."
+      "Skriv en tekst om din professionelle erfaring. Du får bagefter en forbedret version."
+  },
+
+  {
+    exam: "PD3",
+    type: "structured_argument",
+    level: "B2",
+    instruction:
+      "Giv din mening om online arbejde vs kontorarbejde. Brug argumenter."
+  },
+
+  {
+    exam: "PD3",
+    type: "conversation",
+    level: "B2",
+    instruction:
+      "Du deltager i et møde. Forklar din mening om et arbejdsemne."
   }
 
 ];
@@ -117,18 +147,35 @@ export async function generateAdaptiveTask({
 
   action,
   userLevel = "PD2",
-  examTarget = "PD2"
+  examTarget = "PD2",
+  previousTaskType = null
 
 }) {
 
+  console.log("AdaptiveTaskGenerator input:", {
+    action,
+    userLevel,
+    examTarget,
+    previousTaskType
+  });
+
   // =========================
-  // A2 FOUNDATION
+  // FOUNDATION MODE
   // =========================
 
-  if (action === "REINFORCE_FOUNDATION" || userLevel === "A2") {
+  if (
+    action === "REINFORCE_FOUNDATION" ||
+    userLevel === "A2"
+  ) {
 
-    return pickRandom(A2_TASKS);
+    const task = pickDifferent(
+      FOUNDATION_TASKS,
+      previousTaskType
+    );
 
+    console.log("Generated FOUNDATION task:", task.type);
+
+    return task;
   }
 
   // =========================
@@ -141,8 +188,14 @@ export async function generateAdaptiveTask({
     userLevel === "PD3"
   ) {
 
-    return pickRandom(PD3_TASKS);
+    const task = pickDifferent(
+      PD3_TASKS,
+      previousTaskType
+    );
 
+    console.log("Generated PD3 task:", task.type);
+
+    return task;
   }
 
   // =========================
@@ -155,14 +208,24 @@ export async function generateAdaptiveTask({
     userLevel === "PD2"
   ) {
 
-    return pickRandom(PD2_TASKS);
+    const task = pickDifferent(
+      PD2_TASKS,
+      previousTaskType
+    );
 
+    console.log("Generated PD2 task:", task.type);
+
+    return task;
   }
 
   // =========================
-  // SAFE FALLBACK
+  // FALLBACK
   // =========================
 
-  return pickRandom(A2_TASKS);
+  const fallback = pickRandom(FOUNDATION_TASKS);
+
+  console.log("Generated fallback task:", fallback.type);
+
+  return fallback;
 
 }
