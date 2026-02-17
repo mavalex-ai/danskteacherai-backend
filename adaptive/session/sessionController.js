@@ -1,8 +1,11 @@
+// Backend2/adaptive/session/sessionController.js
+
 import { UserState } from "../state/index.js";
 import decisionEngine from "../decision/decisionEngine.js";
 
 import { generateAdaptiveTask } from "../ai/adaptiveTaskGenerator.js";
 import { explainDecision } from "../ai/adaptiveReasoning.js";
+import { correctUserText } from "../ai/correctUserText.js";
 
 import {
   loadUserState,
@@ -17,13 +20,19 @@ import { getPD3Verdict } from "../exam/pd3.verdict.js";
 import { calculateLanguageMode } from "../language/languageMode.js";
 
 
+// =========================
+// LOAD USER STATE
+// =========================
+
 async function getUserState(userId) {
 
   let userState = await loadUserState(userId);
 
   if (!userState) {
 
-    return new UserState(userId);
+    console.log("Creating new UserState:", userId);
+
+    userState = new UserState(userId);
 
   }
 
@@ -34,11 +43,20 @@ async function getUserState(userId) {
 }
 
 
+// =========================
+// MAIN ADAPTIVE STEP
+// =========================
+
 async function handleUserStep(userId, answerMeta = {}) {
 
-  if (!userId) throw new Error("userId required");
+  if (!userId) {
+    throw new Error("userId required");
+  }
 
   const userState = await getUserState(userId);
+
+  console.log("Adaptive step for user:", userId);
+  console.log("Answer meta:", answerMeta);
 
 
   // =========================
@@ -48,8 +66,10 @@ async function handleUserStep(userId, answerMeta = {}) {
   if (
     !userState.diagnostic?.active &&
     !userState.subscription?.active &&
-    userState.freeAdaptiveStepsRemaining <= 0
+    userState.usage.text.stepsUsed >= 5
   ) {
+
+    console.log("Paywall triggered");
 
     return {
       action: "PAYWALL",
@@ -61,33 +81,53 @@ async function handleUserStep(userId, answerMeta = {}) {
 
 
   // =========================
-  // CONSUME FREE STEP
-  // =========================
-
-  if (
-    !userState.subscription?.active &&
-    userState.freeAdaptiveStepsRemaining > 0
-  ) {
-
-    userState.freeAdaptiveStepsRemaining -= 1;
-
-  }
-
-
-  // =========================
   // UPDATE USAGE
   // =========================
 
   userState.updateFromAnswer(answerMeta);
 
 
+  // =========================
+  // AI TEXT CORRECTION
+  // =========================
+
+  let correction = null;
+
+  if (
+    typeof answerMeta.answer === "string" &&
+    answerMeta.answer.length > 10
+  ) {
+
+    console.log("Running AI correction...");
+
+    try {
+
+      correction = await correctUserText({
+
+        text: answerMeta.answer,
+
+        level: userState.exam.target || "B1"
+
+      });
+
+      console.log("Correction result:", correction);
+
+    }
+    catch (err) {
+
+      console.error("Correction failed:", err);
+
+    }
+
+  }
+
+
+  // =========================
+  // PD3 SCORING (EXAM MODE)
+  // =========================
+
   let examinerFeedback = null;
   let examProgress = null;
-
-
-  // =========================
-  // PD3 SCORING
-  // =========================
 
   if (
     userState.exam.target === "PD3" &&
@@ -96,18 +136,24 @@ async function handleUserStep(userId, answerMeta = {}) {
   ) {
 
     const scoring = evaluatePD3Answer({
+
       answer: answerMeta.answer,
       task: answerMeta.task
+
     });
 
     userState.exam.readiness = {
+
       total: scoring.total,
       breakdown: scoring.breakdown
+
     };
 
     examProgress = {
+
       attempts: userState.exam.attempts,
       readiness: userState.exam.readiness
+
     };
 
     examinerFeedback = scoring.feedback;
@@ -122,11 +168,13 @@ async function handleUserStep(userId, answerMeta = {}) {
   const result = decisionEngine(userState.toJSON());
 
   logDecision({
+
     userId,
     decision: result.decision,
     scores: result.scores,
     signals: result.signals,
     trace: result.decision.trace
+
   });
 
 
@@ -137,24 +185,38 @@ async function handleUserStep(userId, answerMeta = {}) {
   if (userState.exam.target === "PD3" && examProgress) {
 
     const verdict = getPD3Verdict({
+
       readiness: examProgress.readiness,
       attempts: examProgress.attempts
+
     });
 
-    if (verdict.action === "PASS_PD3" || verdict.action === "FAIL_PD3") {
+    if (
+      verdict.action === "PASS_PD3" ||
+      verdict.action === "FAIL_PD3"
+    ) {
 
       userState.languageMode = calculateLanguageMode(userState);
 
       await saveUserState(userState);
 
       return {
+
         ...verdict,
+
         explanation: await explainDecision({
+
           decision: verdict,
           signals: []
+
         }),
+
         examProgress,
+
+        correction,
+
         languageMode: userState.languageMode
+
       };
 
     }
@@ -163,51 +225,89 @@ async function handleUserStep(userId, answerMeta = {}) {
 
 
   // =========================
+  // EXPLANATION
+  // =========================
+
+  const explanation = await explainDecision({
+
+    decision: result.decision,
+    signals: result.signals
+
+  });
+
+
+  // =========================
   // TASK GENERATION
   // =========================
 
   let task = null;
 
-  if (!examinerFeedback) {
+  task = await generateAdaptiveTask({
 
-    const adaptiveLevel =
-  userState.diagnostic?.estimatedLevel ||
-  userState.exam?.target ||
-  "PD2";
+    action: result.decision.action,
 
-task = await generateAdaptiveTask({
-  action: result.decision.action,
-  examTarget: adaptiveLevel,
-  userLevel: adaptiveLevel
-});
+    userLevel: userState.exam.target || "PD2",
 
-  }
+    examTarget: userState.exam.target || "PD2"
 
+  });
+
+
+  console.log("Generated task:", task);
+
+
+  // =========================
+  // LANGUAGE MODE UPDATE
+  // =========================
 
   userState.languageMode = calculateLanguageMode(userState);
 
+
+  // =========================
+  // SAVE STATE
+  // =========================
+
   await saveUserState(userState);
 
+
+  // =========================
+  // FINAL RESPONSE
+  // =========================
 
   return {
 
     ...result.decision,
 
+    explanation,
+
     task,
+
+    examProgress,
 
     examinerFeedback,
 
-    examProgress,
+    correction,
 
     languageMode: userState.languageMode,
 
     usage: userState.usage,
 
-    freeStepsRemaining: userState.freeAdaptiveStepsRemaining
+    freeStepsRemaining: Math.max(
+      0,
+      5 - userState.usage.text.stepsUsed
+    )
 
   };
 
 }
 
 
-export { handleUserStep };
+// =========================
+// EXPORT
+// =========================
+
+export {
+
+  handleUserStep
+
+};
