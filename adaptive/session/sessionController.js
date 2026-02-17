@@ -1,5 +1,3 @@
-// Backend2/adaptive/session/sessionController.js
-
 import { UserState } from "../state/index.js";
 import decisionEngine from "../decision/decisionEngine.js";
 
@@ -29,11 +27,7 @@ async function getUserState(userId) {
   let userState = await loadUserState(userId);
 
   if (!userState) {
-
-    console.log("Creating new UserState:", userId);
-
     userState = new UserState(userId);
-
   }
 
   userState.ensureUsageForToday();
@@ -44,7 +38,7 @@ async function getUserState(userId) {
 
 
 // =========================
-// MAIN ADAPTIVE STEP
+// MAIN STEP
 // =========================
 
 async function handleUserStep(userId, answerMeta = {}) {
@@ -55,12 +49,15 @@ async function handleUserStep(userId, answerMeta = {}) {
 
   const userState = await getUserState(userId);
 
-  console.log("Adaptive step for user:", userId);
-  console.log("Answer meta:", answerMeta);
+  // normalize answer field (FIX)
+  const userText =
+    answerMeta.answer ||
+    answerMeta.text ||
+    null;
 
 
   // =========================
-  // PAYWALL ENFORCEMENT
+  // PAYWALL
   // =========================
 
   if (
@@ -68,8 +65,6 @@ async function handleUserStep(userId, answerMeta = {}) {
     !userState.subscription?.active &&
     userState.usage.text.stepsUsed >= 5
   ) {
-
-    console.log("Paywall triggered");
 
     return {
       action: "PAYWALL",
@@ -84,38 +79,40 @@ async function handleUserStep(userId, answerMeta = {}) {
   // UPDATE USAGE
   // =========================
 
-  userState.updateFromAnswer(answerMeta);
+  userState.updateFromAnswer({
+    ...answerMeta,
+    answer: userText
+  });
 
 
   // =========================
-  // AI TEXT CORRECTION
+  // AI CORRECTION (FIXED)
   // =========================
 
   let correction = null;
 
   if (
-    typeof answerMeta.answer === "string" &&
-    answerMeta.answer.length > 10
+    typeof userText === "string" &&
+    userText.length > 10
   ) {
 
-    console.log("Running AI correction...");
+    console.log("Running correction on:", userText.substring(0, 50));
 
     try {
 
       correction = await correctUserText({
 
-        text: answerMeta.answer,
-
+        text: userText,
         level: userState.exam.target || "B1"
 
       });
 
-      console.log("Correction result:", correction);
+      console.log("Correction success");
 
     }
     catch (err) {
 
-      console.error("Correction failed:", err);
+      console.error("Correction error:", err);
 
     }
 
@@ -123,7 +120,7 @@ async function handleUserStep(userId, answerMeta = {}) {
 
 
   // =========================
-  // PD3 SCORING (EXAM MODE)
+  // EXAM SCORING
   // =========================
 
   let examinerFeedback = null;
@@ -131,13 +128,13 @@ async function handleUserStep(userId, answerMeta = {}) {
 
   if (
     userState.exam.target === "PD3" &&
-    typeof answerMeta.answer === "string" &&
+    typeof userText === "string" &&
     answerMeta.task
   ) {
 
     const scoring = evaluatePD3Answer({
 
-      answer: answerMeta.answer,
+      answer: userText,
       task: answerMeta.task
 
     });
@@ -179,70 +176,10 @@ async function handleUserStep(userId, answerMeta = {}) {
 
 
   // =========================
-  // FINAL EXAM VERDICT
+  // GENERATE TASK
   // =========================
 
-  if (userState.exam.target === "PD3" && examProgress) {
-
-    const verdict = getPD3Verdict({
-
-      readiness: examProgress.readiness,
-      attempts: examProgress.attempts
-
-    });
-
-    if (
-      verdict.action === "PASS_PD3" ||
-      verdict.action === "FAIL_PD3"
-    ) {
-
-      userState.languageMode = calculateLanguageMode(userState);
-
-      await saveUserState(userState);
-
-      return {
-
-        ...verdict,
-
-        explanation: await explainDecision({
-
-          decision: verdict,
-          signals: []
-
-        }),
-
-        examProgress,
-
-        correction,
-
-        languageMode: userState.languageMode
-
-      };
-
-    }
-
-  }
-
-
-  // =========================
-  // EXPLANATION
-  // =========================
-
-  const explanation = await explainDecision({
-
-    decision: result.decision,
-    signals: result.signals
-
-  });
-
-
-  // =========================
-  // TASK GENERATION
-  // =========================
-
-  let task = null;
-
-  task = await generateAdaptiveTask({
+  const task = await generateAdaptiveTask({
 
     action: result.decision.action,
 
@@ -253,32 +190,32 @@ async function handleUserStep(userId, answerMeta = {}) {
   });
 
 
-  console.log("Generated task:", task);
-
-
   // =========================
-  // LANGUAGE MODE UPDATE
+  // UPDATE LANGUAGE MODE
   // =========================
 
   userState.languageMode = calculateLanguageMode(userState);
 
 
   // =========================
-  // SAVE STATE
+  // SAVE
   // =========================
 
   await saveUserState(userState);
 
 
   // =========================
-  // FINAL RESPONSE
+  // RESPONSE
   // =========================
 
   return {
 
     ...result.decision,
 
-    explanation,
+    explanation: await explainDecision({
+      decision: result.decision,
+      signals: result.signals
+    }),
 
     task,
 
@@ -302,12 +239,6 @@ async function handleUserStep(userId, answerMeta = {}) {
 }
 
 
-// =========================
-// EXPORT
-// =========================
-
 export {
-
   handleUserStep
-
 };
