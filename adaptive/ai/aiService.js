@@ -1,32 +1,86 @@
-// Backend2/ai/aiService.js
+// Backend2/adaptive/ai/aiService.js
 
 import { getOpenAI } from "./openaiClient.js";
 
 /**
- * Безопасный вызов Chat Completion
- * @returns {string|null}
+ * Generate AI teacher reply
+ * Safe, production-ready
+ *
+ * Supports:
+ * - sk-proj keys
+ * - project-scoped authentication
+ * - graceful fallback if AI unavailable
+ *
+ * @param {Object} params
+ * @param {string} params.systemPrompt
+ * @param {string} params.userMessage
+ *
+ * @returns {Promise<string|null>}
  */
-async function generateTeacherReply({ systemPrompt, userMessage }) {
+export async function generateTeacherReply({
+  systemPrompt,
+  userMessage
+}) {
+
   const openai = getOpenAI();
 
+  // Graceful fallback if OpenAI disabled
   if (!openai) {
-    return null; // AI отключён → graceful fallback
+
+    console.warn("⚠️ OpenAI client unavailable");
+
+    return null;
+
+  }
+
+  if (!userMessage || typeof userMessage !== "string") {
+
+    console.warn("⚠️ Empty userMessage");
+
+    return null;
+
   }
 
   try {
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1",
+
+      model: "gpt-4o-mini",
+
+      temperature: 0.4,
+
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage }
+
+        {
+          role: "system",
+          content:
+            systemPrompt ||
+            "You are a professional Danish language teacher. Help the student improve their Danish."
+        },
+
+        {
+          role: "user",
+          content: userMessage
+        }
+
       ]
+
     });
 
-    return completion.choices[0].message.content;
-  } catch (err) {
-    console.error("❌ OpenAI request failed:", err.message);
-    return null;
-  }
-}
+    const reply =
+      completion?.choices?.[0]?.message?.content || null;
 
-export { generateTeacherReply };
+    return reply;
+
+  }
+  catch (err) {
+
+    console.error("❌ OpenAI request failed");
+
+    console.error(err.message);
+
+    return null;
+
+  }
+
+}

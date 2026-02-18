@@ -1,64 +1,83 @@
-import OpenAI from "openai";
+import { getOpenAI } from "../ai/openaiClient.js";
 
-export async function evaluateDiagnosticAnswer(task, userText) {
+export async function evaluateDiagnosticAnswer({
 
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is missing");
+  question,
+  userAnswer,
+  expectedLevel = "B1"
+
+}) {
+
+  const openai = getOpenAI();
+
+  if (!openai) {
+
+    console.error("❌ OpenAI unavailable in diagnostic");
+
+    return null;
+
   }
 
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-  });
+  try {
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    temperature: 0,
-    messages: [
-      {
-        role: "system",
-        content: `
-You are an official Danish language examiner.
+    const prompt = `
+You are a Danish language examiner.
 
-You MUST evaluate based on:
+Expected level: ${expectedLevel}
 
-- grammar accuracy
-- vocabulary range
-- sentence complexity
-- coherence
-- correctness for the stated level
+Question:
+${question}
 
-Scoring rules:
+Student answer:
+${userAnswer}
 
-0.0–0.3 → clearly below PD2
-0.4–0.6 → PD2 level
-0.7–0.85 → strong PD2 / weak PD3
-0.85–1.0 → clear PD3 level
+Return JSON:
 
-Respond ONLY with JSON:
+{
+  "level": "A1 | A2 | B1 | B2 | C1",
+  "score": number,
+  "feedback": "short explanation"
+}
+`;
 
-{"score": number}
-`
-      },
-      {
-        role: "user",
-        content: `
-Task level: ${task.level}
-Task focus: ${task.focus}
+    const response =
+    await openai.chat.completions.create({
 
-User answer:
-${userText}
-`
+      model: "gpt-4o-mini",
+
+      temperature: 0.2,
+
+      messages: [
+
+        {
+          role: "system",
+          content: "You are a professional Danish examiner."
+        },
+
+        {
+          role: "user",
+          content: prompt
+        }
+
+      ],
+
+      response_format: {
+        type: "json_object"
       }
-    ]
-  });
 
-  const raw = completion.choices[0].message.content;
+    });
 
-  if (!raw) {
-    throw new Error("Empty OpenAI response");
+    return JSON.parse(
+      response.choices[0].message.content
+    );
+
+  }
+  catch (err) {
+
+    console.error("Diagnostic error:", err);
+
+    return null;
+
   }
 
-  const parsed = JSON.parse(raw);
-
-  return parsed.score;
 }
