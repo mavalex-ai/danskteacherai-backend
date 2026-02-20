@@ -33,7 +33,21 @@ export class UserState {
     this.freeAdaptiveStepsRemaining = 0;
 
     // =========================
-    // USAGE
+    // GLOBAL FREE CONVERSATION LIMIT
+    // =========================
+
+    this.freeConversation = {
+
+      secondsUsedTotal: 0,
+
+      secondsLimitTotal: 180, // 3 minutes global free limit
+
+      limitReached: false
+
+    };
+
+    // =========================
+    // USAGE (DAILY TRACKING)
     // =========================
 
     this.usage = this.createFreshUsage();
@@ -85,7 +99,7 @@ export class UserState {
   }
 
   // =========================
-  // USAGE
+  // DAILY USAGE
   // =========================
 
   createFreshUsage() {
@@ -95,15 +109,23 @@ export class UserState {
       date: new Date().toISOString().slice(0, 10),
 
       voice: {
+
         secondsUsed: 0,
+
         limitSeconds: 0,
+
         exhausted: false
+
       },
 
       text: {
+
         stepsUsed: 0,
+
         softLimit: 30,
+
         reinforcementMode: false
+
       }
 
     };
@@ -149,14 +171,40 @@ export class UserState {
   }
 
   // =========================
+  // GLOBAL FREE CONVERSATION
+  // =========================
+
+  canUseFreeConversation() {
+
+    return !this.freeConversation.limitReached;
+
+  }
+
+  addFreeConversationSeconds(seconds) {
+
+    if (this.subscription.active) return;
+
+    this.freeConversation.secondsUsedTotal += seconds;
+
+    if (
+
+      this.freeConversation.secondsUsedTotal >=
+
+      this.freeConversation.secondsLimitTotal
+
+    ) {
+
+      this.freeConversation.limitReached = true;
+
+    }
+
+  }
+
+  // =========================
   // DIAGNOSTIC CONTROL
   // =========================
 
   startDiagnostic() {
-
-    if (!this.diagnostic) {
-      this.diagnostic = {};
-    }
 
     this.diagnostic.active = true;
 
@@ -184,7 +232,6 @@ export class UserState {
 
     this.mode = "ADAPTIVE";
 
-    // 🎁 Give free adaptive steps
     this.freeAdaptiveStepsRemaining = 5;
 
     if (avgScore >= 0.65)
@@ -204,7 +251,13 @@ export class UserState {
 
     this.usage.voice.secondsUsed += seconds;
 
-    if (this.usage.voice.secondsUsed >= this.usage.voice.limitSeconds) {
+    if (
+
+      this.usage.voice.secondsUsed >=
+
+      this.usage.voice.limitSeconds
+
+    ) {
 
       this.usage.voice.exhausted = true;
 
@@ -218,7 +271,13 @@ export class UserState {
 
     this.usage.text.stepsUsed += 1;
 
-    if (this.usage.text.stepsUsed >= this.usage.text.softLimit) {
+    if (
+
+      this.usage.text.stepsUsed >=
+
+      this.usage.text.softLimit
+
+    ) {
 
       this.usage.text.reinforcementMode = true;
 
@@ -226,19 +285,11 @@ export class UserState {
 
   }
 
-  // =========================
-  // ANSWER UPDATE
-  // =========================
-
   updateFromAnswer(answerMeta = {}) {
 
     this.session.lastActive = Date.now();
 
     if (this.diagnostic && this.diagnostic.active) {
-
-      if (!this.diagnostic.scores) {
-        this.diagnostic.scores = [];
-      }
 
       if (typeof answerMeta.score === "number") {
 
@@ -256,7 +307,15 @@ export class UserState {
 
     if (typeof answerMeta.voiceSeconds === "number") {
 
-      this.addVoiceSeconds(answerMeta.voiceSeconds);
+      if (this.subscription.active) {
+
+        this.addVoiceSeconds(answerMeta.voiceSeconds);
+
+      } else {
+
+        this.addFreeConversationSeconds(answerMeta.voiceSeconds);
+
+      }
 
     }
 
@@ -279,6 +338,8 @@ export class UserState {
       subscription: this.subscription,
 
       usage: this.usage,
+
+      freeConversation: this.freeConversation,
 
       diagnostic: this.diagnostic,
 

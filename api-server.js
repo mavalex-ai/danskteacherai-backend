@@ -1,89 +1,46 @@
-import dotenv from "dotenv";
-dotenv.config();
+// Backend2/api-server.js
 
-console.log("🔥 NEW DIAGNOSTIC CONTROLLER ACTIVE");
+console.log("🔥 Dansk TeacherAI backend starting...");
 console.log("RUNNING FROM:", import.meta.url);
 
-console.log("OPENAI KEY EXISTS:", !!process.env.OPENAI_API_KEY);
-console.log("OPENAI KEY LENGTH:", process.env.OPENAI_API_KEY?.length);
-console.log("OPENAI PROJECT:", process.env.OPENAI_PROJECT_ID);
-
 import express from "express";
+import dotenv from "dotenv";
 import cors from "cors";
 
 import { UserState } from "./adaptive/state/UserState.js";
 
-// =========================
-// SESSION / ADAPTIVE CORE
-// =========================
-
-import { handleUserStep }
-from "./adaptive/session/sessionController.js";
-
-// =========================
-// STATE PERSISTENCE
-// =========================
+import { handleUserStep } from "./adaptive/session/sessionController.js";
 
 import {
-
   loadUserState,
   saveUserState,
   resetUserState
-
-}
-from "./adaptive/persistence/stateRepository.js";
-
-// =========================
-// EXAM CONTROL
-// =========================
+} from "./adaptive/persistence/stateRepository.js";
 
 import {
-
   startExam,
   stopExam,
   getExamStatus
-
-}
-from "./adaptive/exam/examController.js";
-
-// =========================
-// DIAGNOSTIC
-// =========================
+} from "./adaptive/exam/examController.js";
 
 import {
-
   startDiagnostic,
   diagnosticNextStep
+} from "./adaptive/diagnostic/diagnosticController.js";
 
-}
-from "./adaptive/diagnostic/diagnosticController.js";
+import { generateTeacherReply } from "./adaptive/ai/conversationTeacher.js";
 
-// =========================
-// AI SERVICES
-// =========================
+dotenv.config();
 
-import * as aiService
-from "./adaptive/ai/aiService.js";
-
-import {
-
-  generateTeacherReply
-
-}
-from "./adaptive/ai/conversationTeacher.js";
-
-// =========================
-// INIT EXPRESS
-// =========================
+console.log("OPENAI KEY EXISTS:", !!process.env.OPENAI_API_KEY);
+console.log("OPENAI PROJECT:", process.env.OPENAI_PROJECT_ID);
 
 const app = express();
 
 app.use(cors());
 
 app.use(express.json({
-
   limit: "2mb"
-
 }));
 
 // =====================================================
@@ -93,70 +50,9 @@ app.use(express.json({
 app.get("/health", (req, res) => {
 
   res.json({
-
     status: "ok",
-
     timestamp: Date.now()
-
   });
-
-});
-
-// =====================================================
-// ENV DEBUG
-// =====================================================
-
-app.get("/debug/env", (req, res) => {
-
-  const key = process.env.OPENAI_API_KEY;
-
-  res.json({
-
-    hasKey: !!key,
-
-    keyLength: key ? key.length : 0,
-
-    keyPrefix: key ? key.substring(0, 7) : null,
-
-    project: process.env.OPENAI_PROJECT_ID
-
-  });
-
-});
-
-// =====================================================
-// DEV RESET USER
-// =====================================================
-
-app.get("/dev/reset-user", async (req, res) => {
-
-  try {
-
-    const userId = req.query.userId || "test-user";
-
-    await resetUserState(userId);
-
-    res.json({
-
-      status: "user_reset_done",
-
-      userId
-
-    });
-
-  }
-
-  catch (err) {
-
-    console.error("Reset error:", err);
-
-    res.status(500).json({
-
-      error: "Reset failed"
-
-    });
-
-  }
 
 });
 
@@ -168,10 +64,11 @@ app.get("/api/test-openai", async (req, res) => {
 
   try {
 
-    const reply =
-    await generateTeacherReply({
+    const result = await generateTeacherReply({
 
-      message: "Sig OK",
+      userId: "test-user",
+
+      message: "Hej!",
 
       history: [],
 
@@ -183,15 +80,14 @@ app.get("/api/test-openai", async (req, res) => {
 
       ok: true,
 
-      reply
+      reply: result.reply
 
     });
 
   }
-
   catch (err) {
 
-    console.error("OpenAI test failed:", err);
+    console.error(err);
 
     res.status(500).json({
 
@@ -206,7 +102,7 @@ app.get("/api/test-openai", async (req, res) => {
 });
 
 // =====================================================
-// CONVERSATION ENDPOINT
+// CONVERSATION ENDPOINT (GLOBAL LIMIT ENABLED)
 // =====================================================
 
 app.post("/api/conversation", async (req, res) => {
@@ -215,141 +111,13 @@ app.post("/api/conversation", async (req, res) => {
 
     const {
 
-      message,
-      history = [],
-      level = "B1"
-
-    } = req.body;
-
-    if (!message) {
-
-      return res.status(400).json({
-
-        error: "message is required"
-
-      });
-
-    }
-
-    const reply =
-    await generateTeacherReply({
-
-      message,
-      history,
-      level
-
-    });
-
-    res.json({
-
-      reply
-
-    });
-
-  }
-
-  catch (err) {
-
-    console.error("Conversation error:", err);
-
-    res.status(500).json({
-
-      error: err.message
-
-    });
-
-  }
-
-});
-
-// =====================================================
-// EXAM CONTROL
-// =====================================================
-
-app.post("/exam/start", startExam);
-
-app.post("/exam/stop", stopExam);
-
-app.get("/exam/status", getExamStatus);
-
-// =====================================================
-// DIAGNOSTIC
-// =====================================================
-
-app.post("/diagnostic/start", startDiagnostic);
-
-app.post("/diagnostic/step", diagnosticNextStep);
-
-// =====================================================
-// SET MODE
-// =====================================================
-
-app.post("/session/set-mode", async (req, res) => {
-
-  try {
-
-    const { userId, mode } = req.body;
-
-    if (!userId || !mode) {
-
-      return res.status(400).json({
-
-        error: "userId and mode required"
-
-      });
-
-    }
-
-    let userState =
-    await loadUserState(userId);
-
-    if (!userState) {
-
-      userState =
-      new UserState(userId);
-
-    }
-
-    userState.mode = mode;
-
-    await saveUserState(userState);
-
-    res.json({
-
-      status: "ok",
-
-      mode
-
-    });
-
-  }
-
-  catch (err) {
-
-    console.error("Set mode error:", err);
-
-    res.status(500).json({
-
-      error: err.message
-
-    });
-
-  }
-
-});
-
-// =====================================================
-// ADAPTIVE PIPELINE
-// =====================================================
-
-app.post("/adaptive/next-step", async (req, res) => {
-
-  try {
-
-    const {
-
       userId,
-      answerMeta
+
+      message,
+
+      history = [],
+
+      level = "B1"
 
     } = req.body;
 
@@ -363,8 +131,84 @@ app.post("/adaptive/next-step", async (req, res) => {
 
     }
 
-    const decision =
-    await handleUserStep(
+    if (!message) {
+
+      return res.status(400).json({
+
+        error: "message required"
+
+      });
+
+    }
+
+    const result = await generateTeacherReply({
+
+      userId,
+
+      message,
+
+      history,
+
+      level
+
+    });
+
+    res.json(result);
+
+  }
+  catch (err) {
+
+    console.error("Conversation error:", err);
+
+    res.status(500).json({
+
+      error: "Conversation failed"
+
+    });
+
+  }
+
+});
+
+// =====================================================
+// DIAGNOSTIC
+// =====================================================
+
+app.post("/diagnostic/start", startDiagnostic);
+
+app.post("/diagnostic/step", diagnosticNextStep);
+
+// =====================================================
+// EXAM CONTROL
+// =====================================================
+
+app.post("/exam/start", startExam);
+
+app.post("/exam/stop", stopExam);
+
+app.get("/exam/status", getExamStatus);
+
+// =====================================================
+// ADAPTIVE PIPELINE
+// =====================================================
+
+app.post("/adaptive/next-step", async (req, res) => {
+
+  try {
+
+    const { userId, answerMeta } = req.body;
+
+    if (!userId) {
+
+      return res.status(400).json({
+
+        error: "userId required"
+
+      });
+
+    }
+
+    const decision = await handleUserStep(
 
       userId,
 
@@ -375,14 +219,13 @@ app.post("/adaptive/next-step", async (req, res) => {
     res.json(decision);
 
   }
-
   catch (err) {
 
     console.error("Adaptive error:", err);
 
     res.status(500).json({
 
-      error: err.message
+      error: "Adaptive decision failed"
 
     });
 
@@ -391,16 +234,43 @@ app.post("/adaptive/next-step", async (req, res) => {
 });
 
 // =====================================================
+// DEV RESET USER
+// =====================================================
+
+app.get("/dev/reset-user", async (req, res) => {
+
+  const userId = req.query.userId;
+
+  if (!userId) {
+
+    return res.status(400).json({
+
+      error: "userId required"
+
+    });
+
+  }
+
+  await resetUserState(userId);
+
+  res.json({
+
+    status: "reset",
+
+    userId
+
+  });
+
+});
+
+// =====================================================
 // START SERVER
 // =====================================================
 
-const port =
-process.env.PORT || 3001;
+const port = process.env.PORT || 3001;
 
 app.listen(port, () => {
 
-  console.log(
-    `Dansk TeacherAI backend running on port ${port}`
-  );
+  console.log(`✅ Dansk TeacherAI backend running on port ${port}`);
 
 });
